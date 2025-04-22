@@ -1,3 +1,4 @@
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -13,12 +14,21 @@ const client = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
+function generateCode() {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
 app.post('/send-code', async (req, res) => {
   try {
     const { phone } = req.body;
-    await client.verify.v2.services(process.env.TWILIO_VERIFY_SERVICE_SID)
-      .verifications
-      .create({ to: phone, channel: 'sms' });
+    const code = generateCode();
+
+    await client.messages.create({
+      body: `Your Tanfis verification code is: ${code}`,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: phone,
+    });
+
     res.send({ success: true });
   } catch (error) {
     res.status(500).send({ error: error.message });

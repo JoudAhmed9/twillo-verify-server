@@ -1,56 +1,59 @@
-
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
-const twilio = require('twilio');
-require('dotenv').config();
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const axios = require("axios");
+require("dotenv").config();
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+const PORT = process.env.PORT || 3000;
 
-// simple in-memory store (for demo/testing only)
-const verificationStore = {};
+// ✅ اختبار السيرفر
+app.get("/", (req, res) => {
+  res.send("🚀 Vonage SMS Server is live and ready!");
+});
 
-app.post('/send-code', async (req, res) => {
+// ✅ نقطة إرسال رمز التحقق
+app.post("/send-code", async (req, res) => {
+  // 🟡 طباعة البيانات القادمة من Unity
+  console.log("📥 Received body:", req.body);
+
+  const { phone } = req.body;
+
+  // 🟡 طباعة الرقم
+  console.log("📲 Phone received:", phone);
+
+  if (!phone) {
+    console.log("🚫 Missing phone in request!");
+    return res.status(400).json({ error: "Phone number is missing." });
+  }
+
+  // توليد كود عشوائي من 4 أرقام
+  const code = Math.floor(1000 + Math.random() * 9000);
+
   try {
-    const { phone, code } = req.body;
-
-    if (!phone || !code) {
-      return res.status(400).send({ error: 'Phone or code missing.' });
-    }
-
-    verificationStore[phone] = code;
-
-    await client.messages.create({
-      body: `Your Tanfis verification code is: ${code}`,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: phone,
+    const response = await axios.post("https://rest.nexmo.com/sms/json", null, {
+      params: {
+        api_key: process.env.VONAGE_API_KEY,
+        api_secret: process.env.VONAGE_API_SECRET,
+        to: phone,
+        from: "Tanfis", // الاسم الظاهر في الرسالة
+        text: `Tanfis: Your verification code is ${code}`,
+      },
     });
 
-    res.send({ success: true });
+    console.log("✅ SMS sent to:", phone);
+    // نرجع الكود مع الرد عشان Unity تقدر تقارن
+    res.json({ success: true, code: code.toString() });
   } catch (error) {
-    res.status(500).send({ error: error.message });
+    console.error("❌ Failed to send SMS:", error.message);
+    res.status(500).json({ error: "SMS failed", details: error.message });
   }
 });
 
-app.post('/verify-code', async (req, res) => {
-  try {
-    const { phone, code } = req.body;
-
-    if (verificationStore[phone] === code) {
-      res.send({ success: true });
-    } else {
-      res.status(400).send({ success: false });
-    }
-  } catch (error) {
-    res.status(500).send({ error: error.message });
-  }
+// ✅ بدء تشغيل السيرفر
+app.listen(PORT, () => {
+  console.log(`🚀 Vonage server running on port ${PORT}`);
 });
-
-app.listen(3000, () => console.log('✅ Server running on port 3000'));
